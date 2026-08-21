@@ -18,7 +18,6 @@ async function main() {
     amount: Number(1_000_000n),
     recipient: payer.publicKey.toBase58(),
     uri,
-    burnAuthority: true,
   });
   console.log(`mint:    ${mint}`);
   console.log(`tx:      https://explorer.solana.com/tx/${tx}?cluster=devnet`);

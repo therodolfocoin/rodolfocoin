@@ -4,19 +4,18 @@ import {
   TokenStandard,
 } from '@metaplex-foundation/mpl-token-metadata';
 import {
-  AuthorityType,
   createTokenIfMissing,
   findAssociatedTokenPda,
   getSplAssociatedTokenProgramId,
   mintTokensTo,
   mplToolbox,
-  setAuthority,
 } from '@metaplex-foundation/mpl-toolbox';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { createSignerFromKeypair, generateSigner, signerIdentity } from '@metaplex-foundation/umi';
+import { createSignerFromKeypair, signerIdentity } from '@metaplex-foundation/umi';
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 export const DEVNET_RPC = 'https://api.devnet.solana.com';
 export const NAME = 'Rodolfocoin';
@@ -40,6 +39,22 @@ export function loadOrCreateWallet(): { kp: Keypair; secret: Uint8Array } {
   return { kp, secret: new Uint8Array(kp.secretKey) };
 }
 
+export function sharedMintWallet(walletSecret: Uint8Array): Keypair {
+  const seed = createHash('sha256').update(Buffer.from(walletSecret)).digest();
+  return Keypair.fromSeed(seed);
+}
+
+export function sharedMintAddress(walletSecret: Uint8Array): string {
+  return sharedMintWallet(walletSecret).publicKey.toBase58();
+}
+
+function sharedMintSigner(umi: ReturnType<typeof createUmi>, walletSecret: Uint8Array) {
+  return createSignerFromKeypair(
+    umi,
+    umi.eddsa.createKeypairFromSecretKey(sharedMintWallet(walletSecret).secretKey),
+  );
+}
+
 export async function ensureFunded(conn: Connection, pubkey: Keypair['publicKey']) {
   for (let i = 0; i < 5; i++) {
     if ((await conn.getBalance(pubkey)) >= 0.05 * LAMPORTS_PER_SOL) return;
@@ -58,7 +73,6 @@ export async function mintCoin(opts: {
   amount: number;
   recipient: string;
   uri?: string;
-  burnAuthority?: boolean;
 }): Promise<{ mint: string; tx: string; payer: string }> {
   const { kp: payer, secret } = loadOrCreateWallet();
   await ensureFunded(new Connection(DEVNET_RPC, 'confirmed'), payer.publicKey);
@@ -67,43 +81,55 @@ export async function mintCoin(opts: {
   const signer = createSignerFromKeypair(umi, umi.eddsa.createKeypairFromSecretKey(secret));
   umi.use(signerIdentity(signer));
 
-  const mint = generateSigner(umi);
-  const tx = await createV1(umi, {
-    mint,
-    authority: umi.identity,
-    payer: umi.identity,
-    updateAuthority: umi.identity.publicKey,
-    name: NAME,
-    symbol: SYMBOL,
-    uri: opts.uri ?? URI_DEFAULT,
-    sellerFeeBasisPoints: 0,
-    tokenStandard: TokenStandard.Fungible,
-    decimals: DECIMALS,
-    isMutable: true,
-  })
-    .add(
-      createTokenIfMissing(umi, {
-        mint: mint.publicKey,
-        owner: opts.recipient,
-        ataProgram: getSplAssociatedTokenProgramId(umi),
-      }),
-    )
-    .add(
-      mintTokensTo(umi, {
-        mint: mint.publicKey,
-        token: findAssociatedTokenPda(umi, { mint: mint.publicKey, owner: opts.recipient }),
-        amount: BigInt(Math.round(opts.amount * 10 ** DECIMALS)),
-      }),
-    )
-    .sendAndConfirm(umi);
+  const mint = sharedMintSigner(umi, secret);
+  const exists =
+    (await new Connection(DEVNET_RPC, 'confirmed').getAccountInfo(mint.publicKey)) !== null;
+  const amount = BigInt(Math.round(opts.amount * 10 ** DECIMALS));
 
-  if (opts.burnAuthority) {
-    await setAuthority(umi, {
-      owned: mint.publicKey,
-      owner: umi.identity,
-      authorityType: AuthorityType.MintTokens,
-      newAuthority: null,
-    }).sendAndConfirm(umi);
+  let tx;
+  if (exists) {
+    tx = await createTokenIfMissing(umi, {
+      mint: mint.publicKey,
+      owner: opts.recipient,
+      ataProgram: getSplAssociatedTokenProgramId(umi),
+    })
+      .add(
+        mintTokensTo(umi, {
+          mint: mint.publicKey,
+          token: findAssociatedTokenPda(umi, { mint: mint.publicKey, owner: opts.recipient }),
+          amount,
+        }),
+      )
+      .sendAndConfirm(umi);
+  } else {
+    tx = await createV1(umi, {
+      mint,
+      authority: umi.identity,
+      payer: umi.identity,
+      updateAuthority: umi.identity.publicKey,
+      name: NAME,
+      symbol: SYMBOL,
+      uri: opts.uri ?? URI_DEFAULT,
+      sellerFeeBasisPoints: 0,
+      tokenStandard: TokenStandard.Fungible,
+      decimals: DECIMALS,
+      isMutable: true,
+    })
+      .add(
+        createTokenIfMissing(umi, {
+          mint: mint.publicKey,
+          owner: opts.recipient,
+          ataProgram: getSplAssociatedTokenProgramId(umi),
+        }),
+      )
+      .add(
+        mintTokensTo(umi, {
+          mint: mint.publicKey,
+          token: findAssociatedTokenPda(umi, { mint: mint.publicKey, owner: opts.recipient }),
+          amount,
+        }),
+      )
+      .sendAndConfirm(umi);
   }
 
   return {

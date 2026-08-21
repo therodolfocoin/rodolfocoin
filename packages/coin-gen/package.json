@@ -8,7 +8,10 @@
   },
   "scripts": {
     "create": "bun src/create-coin.ts",
-    "burn": "bun src/burn-coin.ts"
+    "burn": "bun src/burn-coin.ts",
+    "burn-all": "bun src/burn-all.ts",
+    "drain": "bun src/drain.ts",
+    "check": "bun src/self-check.ts"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
