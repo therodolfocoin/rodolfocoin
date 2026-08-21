@@ -1,3 +1,5 @@
+# build context must be the repo root (bun.lock + workspace live there):
+# Coolify -> Settings -> Build => Dockerfile: packages/casino/Dockerfile, Context: /
 # build the casino (bun workspace)
 FROM oven/bun:1.3.14 AS build
 WORKDIR /app
