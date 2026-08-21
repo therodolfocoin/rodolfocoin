@@ -13,7 +13,7 @@ import {
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { createSignerFromKeypair, signerIdentity } from '@metaplex-foundation/umi';
 import { base58 } from '@metaplex-foundation/umi/serializers';
-import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
@@ -83,7 +83,9 @@ export async function mintCoin(opts: {
 
   const mint = sharedMintSigner(umi, secret);
   const exists =
-    (await new Connection(DEVNET_RPC, 'confirmed').getAccountInfo(mint.publicKey)) !== null;
+    (await new Connection(DEVNET_RPC, 'confirmed').getAccountInfo(
+      new PublicKey(sharedMintAddress(secret)),
+    )) !== null;
   const amount = BigInt(Math.round(opts.amount * 10 ** DECIMALS));
 
   let tx;
