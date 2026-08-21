@@ -26,6 +26,10 @@ export const URI_DEFAULT = 'https://i.imgur.com/vsqRm7d.jpeg';
 export const KEY_PATH = '../../.keys/devnet.json';
 
 export function loadOrCreateWallet(): { kp: Keypair; secret: Uint8Array } {
+  if (process.env.RODOLFOCOIN_SECRET) {
+    const secret = Uint8Array.from(JSON.parse(process.env.RODOLFOCOIN_SECRET));
+    return { kp: Keypair.fromSecretKey(secret), secret };
+  }
   if (existsSync(KEY_PATH)) {
     const secret = Uint8Array.from(JSON.parse(readFileSync(KEY_PATH, 'utf8')));
     return { kp: Keypair.fromSecretKey(secret), secret };
