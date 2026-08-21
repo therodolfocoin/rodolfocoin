@@ -37,7 +37,7 @@
 	}
 </script>
 
-<div class="grid aspect-square w-full grid-cols-8 overflow-hidden rounded-lg border shadow select-none" aria-label="chess board">
+<div class="grid aspect-square w-full grid-cols-8 grid-rows-8 overflow-hidden rounded-lg border shadow select-none" aria-label="chess board">
 	{#each Array.from({ length: 8 }) as _, rIdx}
 		{#each Array.from({ length: 8 }) as __, fIdx}
 			{@const sq = squareAt(rIdx, fIdx)}
