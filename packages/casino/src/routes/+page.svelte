@@ -32,6 +32,20 @@
 			desc: 'Bet on the long game. The house AI is greedy but beatable.',
 			tag: 'Skill',
 		},
+		{
+			href: '/app/games/holdem-mp',
+			emoji: '👥',
+			title: 'Hold\u2019em Multiplayer',
+			desc: 'Real opponents, real money. 2–4 players, one hand, winner takes the pot.',
+			tag: 'PvP',
+		},
+		{
+			href: '/app/games/chess-mp',
+			emoji: '⚔️',
+			title: 'Chess Multiplayer',
+			desc: 'Both ante, winner takes all. Create a table or join an open one.',
+			tag: 'PvP',
+		},
 	];
 </script>
 
