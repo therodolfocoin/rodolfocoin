@@ -1,0 +1,14 @@
+{
+  "name": "rodolfocoins",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "create": "bun run --filter @rodolfocoins/coin-gen create",
+    "burn": "bun run --filter @rodolfocoins/coin-gen burn",
+    "dev": "bun run --filter @rodolfocoins/web dev"
+  }
+}
