@@ -6,6 +6,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Badge } from '$lib/components/ui/badge';
 	import { wallet, play } from '$lib/client/casino.svelte';
+	import ChessBoard from '$lib/components/ChessBoard.svelte';
 
 	let bet = $state(50);
 	let busy = $state(false);
@@ -15,16 +16,20 @@
 	let tables = $state<any[]>([]);
 	let selected = $state('');
 	let targets = $state<string[]>([]);
+	let lastMove = $state<{ from: string; to: string } | null>(null);
 
-	let game: Chess = new Chess();
-	const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-	const GLYPH: Record<string, string> = {
-		k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟',
-		K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-	};
-
-	const color = $derived(view?.yourColor ?? null);
+	// ponytail: re-parsing the fen per render is fine at this size
+	let game = $derived(view?.fen ? new Chess(view.fen) : new Chess());
+	const color = $derived<'w' | 'b' | null>(view?.yourColor ?? null);
 	const myTurn = $derived(!!color && view.joined && !view.over && view.turn === color);
+	const inCheck = $derived.by(() => {
+		if (!view?.fen || view.over) return '';
+		try {
+			return game.inCheck() ? game.turn() : '';
+		} catch {
+			return '';
+		}
+	});
 
 	$effect(() => {
 		if (!roomId) {
@@ -35,12 +40,6 @@
 		const t = setInterval(poll, 1500);
 		return () => clearInterval(t);
 	});
-
-	function sync(c: Chess) {
-		game = c;
-		selected = '';
-		targets = [];
-	}
 
 	async function loadTables() {
 		try {
@@ -58,7 +57,6 @@
 			.then((data) => {
 				roomId = data.roomId;
 				view = data.view;
-				sync(new Chess(data.view.fen));
 			})
 			.catch((e) => (msg = e instanceof Error ? e.message : String(e)))
 			.finally(() => (busy = false));
@@ -71,7 +69,6 @@
 			const data = await play(t.bet, '/api/mp/chess/join', { roomId: t.roomId });
 			roomId = data.roomId;
 			view = data.view;
-			sync(new Chess(data.view.fen));
 		} catch (e) {
 			msg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -85,41 +82,34 @@
 			const res = await fetch(`/api/mp/chess/state?id=${roomId}&player=${wallet.address}`);
 			if (!res.ok) return;
 			const data = await res.json();
-			if (data.view.fen !== view.fen) sync(new Chess(data.view.fen));
 			view = data.view;
 		} catch {
 			// transient poll errors are fine
 		}
 	}
 
-	function cellSquare(rIdx: number, fIdx: number) {
-		return FILES[color === 'b' ? 7 - fIdx : fIdx] + (color === 'b' ? rIdx + 1 : 8 - rIdx);
-	}
-	function cellPiece(rIdx: number, fIdx: number) {
-		return game.board()[color === 'b' ? 7 - rIdx : rIdx][color === 'b' ? 7 - fIdx : fIdx];
-	}
-	function cellDark(rIdx: number, fIdx: number) {
-		return (rIdx + fIdx) % 2 === 1;
-	}
-
-	function onSquare(rIdx: number, fIdx: number) {
+	function onSquare(sq: Square) {
 		if (!myTurn || busy) return;
-		const sq = cellSquare(rIdx, fIdx);
 		if (selected) {
 			if (targets.includes(sq)) move(selected, sq);
-			else sync(game);
+			else {
+				selected = '';
+				targets = [];
+			}
 			return;
 		}
-		const p = cellPiece(rIdx, fIdx);
+		const p = game.get(sq);
 		if (p && p.color === color) {
 			selected = sq;
-			targets = (game.moves({ square: sq as Square, verbose: true }) as Array<{ to: string }>).map((m) => m.to);
+			targets = (game.moves({ square: sq, verbose: true }) as Array<{ to: string }>).map((m) => m.to);
 		}
 	}
 
 	async function move(from: string, to: string) {
 		busy = true;
 		msg = '';
+		selected = '';
+		targets = [];
 		try {
 			const res = await fetch('/api/mp/chess/move', {
 				method: 'POST',
@@ -128,8 +118,8 @@
 			});
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.message || data.error || 'illegal move');
+			lastMove = { from, to };
 			view = data.view;
-			sync(new Chess(data.view.fen));
 		} catch (e) {
 			msg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -142,7 +132,7 @@
 
 <Card class="mx-auto max-w-xl">
 	<CardHeader>
-		<CardTitle class="text-center text-2xl">♞ Chess — Multiplayer</CardTitle>
+		<CardTitle class="text-center text-2xl">Chess — Multiplayer</CardTitle>
 		<CardDescription class="text-center">Both players ante. Winner takes the pot, draw splits it.</CardDescription>
 	</CardHeader>
 	<CardContent class="flex flex-col gap-5">
@@ -172,28 +162,22 @@
 		{:else}
 			<div class="flex items-center justify-between">
 				<Badge variant="secondary">
-					{#if !view.joined}Waiting for an opponent…{:else}{view.turn === 'w' ? 'White' : 'Black'} to move{/if}
+					{#if !view.joined}Waiting for an opponent…{:else}{myTurn ? 'Your move' : `${view.turn === 'w' ? 'White' : 'Black'} to move`}{/if}
 				</Badge>
 				<Badge>Pot: {(view.bet * 2).toLocaleString()} $K</Badge>
 			</div>
 
-			<div class="mx-auto grid aspect-square w-full max-w-sm grid-cols-8 overflow-hidden rounded-lg border shadow" aria-label="chess board">
-				{#each Array.from({ length: 8 }) as _, rIdx}
-					{#each Array.from({ length: 8 }) as _, fIdx}
-						{@const sq = cellSquare(rIdx, fIdx)}
-						{@const p = cellPiece(rIdx, fIdx)}
-						<button
-							type="button"
-							class="relative flex items-center justify-center text-3xl leading-none transition-colors {cellDark(rIdx, fIdx)
-								? 'bg-[oklch(0.42_0.05_160)]'
-								: 'bg-[oklch(0.88_0.02_95)]'} {sq === selected ? 'ring-2 ring-inset ring-yellow-400' : ''}"
-							onclick={() => onSquare(rIdx, fIdx)}
-						>
-							{#if p}<span class="select-none {p.color === 'w' ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]' : 'text-black'}">{GLYPH[p.type]}</span>{/if}
-							{#if targets.includes(sq)}<span class="absolute inset-0 bg-yellow-400/30"></span>{/if}
-						</button>
-					{/each}
-				{/each}
+			<div class="mx-auto w-full max-w-sm">
+				<ChessBoard
+					fen={view.fen}
+					orientation={color ?? 'w'}
+					{selected}
+					{targets}
+					{lastMove}
+					check={inCheck as 'w' | 'b' | ''}
+					disabled={!myTurn}
+					onsquare={onSquare}
+				/>
 			</div>
 
 			<p class="text-center text-xs text-muted-foreground">

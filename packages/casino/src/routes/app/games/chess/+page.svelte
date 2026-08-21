@@ -6,6 +6,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Badge } from '$lib/components/ui/badge';
 	import { wallet, play } from '$lib/client/casino.svelte';
+	import ChessBoard from '$lib/components/ChessBoard.svelte';
 
 	let bet = $state(50);
 	let color = $state<'w' | 'b'>('w');
@@ -17,20 +18,23 @@
 	let tx = $state('');
 	let selected = $state('');
 	let targets = $state<string[]>([]);
-	let aiFlash = $state<{ from: string; to: string } | null>(null);
+	let lastMove = $state<{ from: string; to: string } | null>(null);
 
-	let game: Chess = new Chess();
-
-	const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-	const GLYPH: Record<string, string> = {
-		k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟',
-		K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-	};
+	// ponytail: re-parsing the fen per render is fine at this size
+	let game = $derived(fen ? new Chess(fen) : new Chess());
+	let inCheck = $derived.by(() => {
+		if (!fen || over) return '';
+		try {
+			return game.inCheck() ? game.turn() : '';
+		} catch {
+			return '';
+		}
+	});
 
 	function resetView() {
 		selected = '';
 		targets = [];
-		aiFlash = null;
+		lastMove = null;
 	}
 
 	function startGame() {
@@ -43,34 +47,14 @@
 			.then((data) => {
 				token = data.token;
 				fen = data.fen;
-				game = new Chess(data.fen);
-				if (data.ai) flashAi(data.ai);
+				if (data.ai) lastMove = data.ai;
 			})
 			.catch((e) => (msg = e instanceof Error ? e.message : String(e)))
 			.finally(() => (busy = false));
 	}
 
-	function flashAi(m: { from: string; to: string }) {
-		aiFlash = m;
-		setTimeout(() => (aiFlash = null), 900);
-	}
-
-	// cells are iterated 0..7 on both axes; views use color-aware orientation
-	function cellSquare(rIdx: number, fIdx: number) {
-		return FILES[color === 'w' ? fIdx : 7 - fIdx] + (color === 'w' ? 8 - rIdx : rIdx + 1);
-	}
-	function cellPiece(rIdx: number, fIdx: number) {
-		return game.board()[color === 'w' ? rIdx : 7 - rIdx][color === 'w' ? fIdx : 7 - fIdx];
-	}
-	function cellDark(rIdx: number, fIdx: number) {
-		const r = color === 'w' ? rIdx : 7 - rIdx;
-		const f = color === 'w' ? fIdx : 7 - fIdx;
-		return (r + f) % 2 === 1;
-	}
-
-	function onSquare(rIdx: number, fIdx: number) {
-		if (over || !token) return;
-		const sq = cellSquare(rIdx, fIdx);
+	function onSquare(sq: Square) {
+		if (over || busy || !token) return;
 		if (selected) {
 			if (targets.includes(sq)) {
 				move(selected, sq);
@@ -80,12 +64,10 @@
 			}
 			return;
 		}
-		if (game.turn() === color) {
-			const p = cellPiece(rIdx, fIdx);
-			if (p && p.color === color) {
-				selected = sq;
-				targets = (game.moves({ square: sq as Square, verbose: true }) as Array<{ to: string }>).map((m) => m.to);
-			}
+		const p = game.get(sq);
+		if (p && p.color === color && game.turn() === color) {
+			selected = sq;
+			targets = (game.moves({ square: sq, verbose: true }) as Array<{ to: string }>).map((m) => m.to);
 		}
 	}
 
@@ -93,7 +75,8 @@
 		busy = true;
 		msg = '';
 		tx = '';
-		resetView();
+		selected = '';
+		targets = [];
 		try {
 			const res = await fetch('/api/games/chess/move', {
 				method: 'POST',
@@ -104,8 +87,7 @@
 			if (!res.ok) throw new Error(data.error || 'illegal move');
 			token = data.token;
 			fen = data.fen;
-			game = new Chess(data.fen);
-			if (data.ai) flashAi(data.ai);
+			lastMove = data.ai ?? { from, to };
 			if (data.over) {
 				over = true;
 				const r = data.result;
@@ -124,7 +106,7 @@
 
 <Card class="mx-auto max-w-xl">
 	<CardHeader>
-		<CardTitle class="text-center text-2xl">♞ Chess</CardTitle>
+		<CardTitle class="text-center text-2xl">Chess</CardTitle>
 		<CardDescription class="text-center">Win 2×, draw returns your bet, loss goes to the house.</CardDescription>
 	</CardHeader>
 	<CardContent class="flex flex-col gap-5">
@@ -152,29 +134,23 @@
 			</form>
 		{:else}
 			<div class="flex items-center justify-between">
-				<Badge variant="secondary">{color === 'w' ? 'White' : 'Black'} to move</Badge>
-				{#if aiFlash}<Badge variant="outline">house: {aiFlash.from}→{aiFlash.to}</Badge>{/if}
+				<Badge variant="secondary">{color === 'w' ? 'White' : 'Black'} · you</Badge>
+				<Badge variant={game.turn() === color ? 'default' : 'outline'}>
+					{game.turn() === color ? 'Your move' : 'House thinking…'}
+				</Badge>
 			</div>
 
-			<div class="mx-auto grid aspect-square w-full max-w-sm grid-cols-8 overflow-hidden rounded-lg border shadow" aria-label="chess board">
-				{#each Array.from({ length: 8 }) as _, rIdx}
-					{#each Array.from({ length: 8 }) as _, fIdx}
-						{@const sq = cellSquare(rIdx, fIdx)}
-						{@const p = cellPiece(rIdx, fIdx)}
-						<button
-							type="button"
-							class="relative flex items-center justify-center text-3xl leading-none transition-colors {cellDark(rIdx, fIdx)
-								? 'bg-[oklch(0.42_0.05_160)]'
-								: 'bg-[oklch(0.88_0.02_95)]'} {sq === selected ? 'ring-2 ring-inset ring-yellow-400' : ''}"
-							onclick={() => onSquare(rIdx, fIdx)}
-						>
-							{#if p}<span class="select-none {p.color === 'w' ? 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]' : 'text-black'}">{GLYPH[p.type]}</span>{/if}
-							{#if targets.includes(sq)}<span class="absolute inset-0 bg-yellow-400/30"></span>{/if}
-							{#if aiFlash && sq === aiFlash.from}<span class="absolute inset-0 bg-red-400/40"></span>{/if}
-							{#if aiFlash && sq === aiFlash.to}<span class="absolute inset-0 bg-yellow-400/50"></span>{/if}
-						</button>
-					{/each}
-				{/each}
+			<div class="mx-auto w-full max-w-sm">
+				<ChessBoard
+					{fen}
+					orientation={color}
+					{selected}
+					{targets}
+					{lastMove}
+					check={inCheck as 'w' | 'b' | ''}
+					disabled={busy || over}
+					onsquare={onSquare}
+				/>
 			</div>
 
 			{#if over}
@@ -185,7 +161,7 @@
 				</div>
 			{:else}
 				<p class="text-center text-sm text-muted-foreground">
-					{busy ? 'The house is thinking…' : 'Select a piece, then a highlighted square. Click a target to move.'}
+					{busy ? 'The house is thinking…' : 'Tap a piece, then a highlighted square.'}
 				</p>
 			{/if}
 
