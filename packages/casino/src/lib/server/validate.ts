@@ -18,9 +18,14 @@ export function parseBet(body: Record<string, unknown> | undefined): Bet {
 }
 
 export async function requireConfirmedBet(betTx: string) {
-  const ok = dev || (await betIsConfirmed(betTx));
-  // ponytail: `dev` bypasses confirmation so the casino is clickable without a devnet wallet; prod verifies the real tx
-  if (!ok) throw error(400, 'bet transaction was not confirmed on-chain yet');
+	if (dev) return;
+	// ponytail: `dev` bypasses confirmation so the casino is clickable without a devnet wallet; prod verifies the real tx.
+	// retry a few seconds — the RPC often lags behind the wallet's submit (and 429s under load)
+	for (let i = 0; i < 8; i++) {
+		if (await betIsConfirmed(betTx)) return;
+		await new Promise((r) => setTimeout(r, 600));
+	}
+	throw error(400, 'bet transaction was not confirmed on-chain yet');
 }
 
 export function parseToken(body: Record<string, unknown> | undefined, key = 'token'): string {
