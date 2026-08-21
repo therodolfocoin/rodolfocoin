@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { PublicKey } from '@solana/web3.js';
-import { mintCoin } from '@rodolfocoins/coin-gen';
+import { transferCoin } from '@rodolfocoins/coin-gen';
 
 export async function POST({ request }) {
 	let body: { amount?: unknown; address?: unknown };
@@ -23,7 +23,7 @@ export async function POST({ request }) {
 		return json({ ok: false, error: 'that is not a real solana address, try again' }, { status: 400 });
 	}
 	try {
-		const res = await mintCoin({ amount, recipient: recipient.toBase58() });
+		const res = await transferCoin({ amount, recipient: recipient.toBase58() });
 		return json({ ok: true, ...res });
 	} catch (e) {
 		return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, { status: 500 });

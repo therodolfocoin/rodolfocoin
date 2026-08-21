@@ -1,4 +1,5 @@
 .keys/
+.casino/
 .svelte-kit/
 .vercel/
 build/

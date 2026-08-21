@@ -9,6 +9,7 @@ import {
   getSplAssociatedTokenProgramId,
   mintTokensTo,
   mplToolbox,
+  transferTokens,
 } from '@metaplex-foundation/mpl-toolbox';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { createSignerFromKeypair, signerIdentity } from '@metaplex-foundation/umi';
@@ -133,6 +134,42 @@ export async function mintCoin(opts: {
       )
       .sendAndConfirm(umi);
   }
+
+  return {
+    mint: mint.publicKey.toString(),
+    tx: base58.deserialize(tx.signature)[0],
+    payer: payer.publicKey.toBase58(),
+  };
+}
+
+export async function transferCoin(opts: {
+  amount: number;
+  recipient: string;
+}): Promise<{ mint: string; tx: string; payer: string }> {
+  const { kp: payer, secret } = loadOrCreateWallet();
+  await ensureFunded(new Connection(DEVNET_RPC, 'confirmed'), payer.publicKey);
+
+  const umi = createUmi(DEVNET_RPC).use(mplToolbox());
+  const signer = createSignerFromKeypair(umi, umi.eddsa.createKeypairFromSecretKey(secret));
+  umi.use(signerIdentity(signer));
+
+  const mint = sharedMintSigner(umi, secret);
+  const amount = BigInt(Math.round(opts.amount * 10 ** DECIMALS));
+
+  const tx = await createTokenIfMissing(umi, {
+    mint: mint.publicKey,
+    owner: opts.recipient,
+    ataProgram: getSplAssociatedTokenProgramId(umi),
+  })
+    .add(
+      transferTokens(umi, {
+        source: findAssociatedTokenPda(umi, { mint: mint.publicKey, owner: umi.identity.publicKey }),
+        destination: findAssociatedTokenPda(umi, { mint: mint.publicKey, owner: opts.recipient }),
+        amount,
+        authority: umi.identity,
+      }),
+    )
+    .sendAndConfirm(umi);
 
   return {
     mint: mint.publicKey.toString(),

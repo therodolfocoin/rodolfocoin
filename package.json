@@ -9,6 +9,7 @@
   "scripts": {
     "create": "bun run --filter @rodolfocoins/coin-gen create",
     "burn": "bun run --filter @rodolfocoins/coin-gen burn",
-    "dev": "bun run --filter @rodolfocoins/web dev"
+    "dev": "bun run --filter @rodolfocoins/web dev",
+    "casino": "bun run --filter @rodolfocoins/casino dev"
   }
 }
