@@ -7,7 +7,8 @@ import { randomInt } from 'node:crypto';
 // works under SvelteKit (Vite sets it) and unit tests (absent => false)
 const isDev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 
-export const DEVNET_RPC = 'https://api.devnet.solana.com';
+// public devnet RPC rate-limits per IP; set RODOLFOCOIN_RPC (e.g. a Helius key) to upgrade
+export const DEVNET_RPC = process.env.RODOLFOCOIN_RPC || 'https://api.devnet.solana.com';
 export const DECIMALS = 6;
 
 // canonical $K mint (fixed supply, no minting here); ROdolfoCoinMINT env overrides
@@ -81,15 +82,24 @@ export async function ensureAta(owner: PublicKey, mint: PublicKey) {
   return ata.address;
 }
 
+// ponytail: 5s TTL cache — every open tab polls balances, and devnet's public
+// RPC rate-limits per IP; use a private RPC (RODOLFOCOIN_RPC env) if this outgrows it
+const balanceCache = new Map<string, { value: number; at: number }>();
+
 export async function balanceOf(owner: string): Promise<number> {
-  const mint = ensureCasinoMint();
-  try {
-    const ata = await getAssociatedTokenAddress(mint, new PublicKey(owner), true);
-    const acc = await getAccount(conn, ata).catch(() => null);
-    return acc ? asCoins(acc.amount) : 0;
-  } catch {
-    return 0;
-  }
+	const hit = balanceCache.get(owner);
+	if (hit && Date.now() - hit.at < 5000) return hit.value;
+	const mint = ensureCasinoMint();
+	let value = 0;
+	try {
+		const ata = await getAssociatedTokenAddress(mint, new PublicKey(owner), true);
+		const acc = await getAccount(conn, ata).catch(() => null);
+		value = acc ? asCoins(acc.amount) : 0;
+	} catch {
+		value = 0;
+	}
+	balanceCache.set(owner, { value, at: Date.now() });
+	return value;
 }
 
 export async function ensureFunded(pubkey: PublicKey) {

@@ -1,6 +1,8 @@
 import type { HandleServerError } from '@sveltejs/kit';
 
-export const handleError: HandleServerError = ({ error, event }) => {
-	console.error('HOOK ERROR:', error, 'on', event.url.pathname);
+// ponytail: log only unexpected (5xx) errors — 404s are just bot scan noise
+export const handleError: HandleServerError = ({ error }) => {
+	const status = (error as { status?: number }).status ?? 500;
+	if (status >= 500) console.error('HOOK ERROR:', error);
 	return { message: 'Internal Error' };
 };
