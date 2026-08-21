@@ -125,6 +125,10 @@ export function ensureCollectorAta(): Promise<PublicKey> {
       await ensureFunded(HOUSE);
       return ensureAta(collector(), ensureCasinoMint());
     })();
+    // a transient 429 shouldn't poison the cache forever — allow a retry next call
+    collectorAtaPromise.catch(() => {
+      collectorAtaPromise = null;
+    });
   }
   return collectorAtaPromise;
 }
