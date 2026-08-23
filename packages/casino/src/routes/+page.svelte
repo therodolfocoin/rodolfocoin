@@ -26,6 +26,13 @@
 			tag: 'Bots',
 		},
 		{
+			href: '/app/games/roulette',
+			emoji: '🎡',
+			title: 'Roulette',
+			desc: 'Single zero wheel. Straight up pays 36×, outside bets pay even money.',
+			tag: 'Instant',
+		},
+		{
 			href: '/app/games/chess',
 			emoji: '♞',
 			title: 'Chess',
@@ -82,6 +89,7 @@
 		<ul class="list-disc space-y-1 pl-5">
 			<li>Bets are real SPL transfers to the collector wallet; payouts come from the casino bankroll. Devnet money, real signatures, fixed supply — no minting.</li>
 			<li>Slots: triple = ×120…×1.5; a pair pays 0.2×.</li>
+			<li>Roulette: single zero. Straight number 36×, dozens 3×, red/black/odd/even/high/low 2×.</li>
 			<li>Blackjack pays 2× (blackjack 2.5×); pushes return your bet.</li>
 			<li>Hold'em: fixed-limit, small blind = 1% of buy-in, big blind = 2%.</li>
 			<li>Chess: win 2×, draw returns your bet, loss keeps it with the house.</li>

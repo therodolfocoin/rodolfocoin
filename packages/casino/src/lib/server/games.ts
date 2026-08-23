@@ -38,6 +38,49 @@ export function spin(bet: number): SpinResult {
   return { reels, win: Math.round(win * 100) / 100 };
 }
 
+// ---------------------------------------------------------------- roulette (single zero)
+export const ROULETTE_REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+export const rouletteColor = (n: number): 'green' | 'red' | 'black' =>
+  n === 0 ? 'green' : ROULETTE_REDS.has(n) ? 'red' : 'black';
+
+export type RoulettePick =
+  | `${number}` // straight up 0-36, pays 36×
+  | 'red' | 'black' | 'odd' | 'even' | 'low' | 'high' // even money, 2×
+  | 'd1' | 'd2' | 'd3'; // dozens, 3×
+
+export const isRoulettePick = (p: unknown): p is RoulettePick =>
+  (typeof p === 'string' && /^\d+$/.test(p) && Number(p) <= 36) ||
+  ['red', 'black', 'odd', 'even', 'low', 'high', 'd1', 'd2', 'd3'].includes(p as string);
+
+export interface RouletteResult {
+  number: number;
+  color: 'green' | 'red' | 'black';
+  win: number; // payout in whole coins (0 = lost)
+}
+
+export function roulette(bet: number, pick: RoulettePick): RouletteResult {
+  const n = randomIntUpTo(37);
+  const color = rouletteColor(n);
+  let win = 0;
+  if (/^\d+$/.test(pick)) {
+    if (Number(pick) === n) win = bet * 36;
+  } else if (n !== 0) {
+    // 0 kills every outside bet
+    const hit =
+      (pick === 'red' && color === 'red') ||
+      (pick === 'black' && color === 'black') ||
+      (pick === 'odd' && n % 2 === 1) ||
+      (pick === 'even' && n % 2 === 0) ||
+      (pick === 'low' && n <= 18) ||
+      (pick === 'high' && n >= 19) ||
+      (pick === 'd1' && n <= 12) ||
+      (pick === 'd2' && n > 12 && n <= 24) ||
+      (pick === 'd3' && n > 24);
+    if (hit) win = bet * (['d1', 'd2', 'd3'].includes(pick) ? 3 : 2);
+  }
+  return { number: n, color, win: Math.round(win * 100) / 100 };
+}
+
 // ---------------------------------------------------------------- blackjack
 export type BJState = {
   id: string;

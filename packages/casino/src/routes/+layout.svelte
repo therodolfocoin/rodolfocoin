@@ -14,6 +14,7 @@
 		{ href: '/', label: 'Lobby' },
 		{ href: '/app/games/slots', label: 'Slots' },
 		{ href: '/app/games/blackjack', label: 'Blackjack' },
+		{ href: '/app/games/roulette', label: 'Roulette' },
 		{ href: '/app/games/holdem', label: 'Texas Hold\u2019em' },
 		{ href: '/app/games/chess', label: 'Chess' },
 	];

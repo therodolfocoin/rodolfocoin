@@ -7,7 +7,7 @@ A Solana devnet memecoin. $K for the people. Mint coins to any wallet from the w
 - [Bun](https://bun.sh) + workspace monorepo
 - `@rodolfocoins/coin-gen` — Solana + Metaplex token creation/minting (TypeScript, runs on Bun)
 - `@rodolfocoins/web` — SvelteKit minting frontend
-- `@rodolfocoins/casino` — SvelteKit + shadcn-svelte + Tailwind casino on devnet (slots, blackjack, Texas hold'em, chess)
+- `@rodolfocoins/casino` — SvelteKit + shadcn-svelte + Tailwind casino on devnet (slots, blackjack, roulette, Texas hold'em, chess)
 
 ## Setup
 
